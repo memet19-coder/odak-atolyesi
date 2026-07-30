@@ -25,7 +25,7 @@ import {
 import "./styles.css";
 
 const STORAGE_KEY = "odak-atolyesi-progress";
-const LOGO_SRC = "/mg-logo.png";
+const LOGO_SRC = `${import.meta.env.BASE_URL}mg-logo.png`;
 const MAX_LEVEL = 30;
 const LEVEL_UP_STREAK = 3;
 const TIMED_SESSION_BASE_SECONDS = 16;
