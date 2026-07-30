@@ -1479,7 +1479,7 @@ function App() {
             <div className="mx-auto mb-5 grid h-28 w-28 place-items-center overflow-hidden rounded-full bg-white p-2 shadow-2xl shadow-red-500/25 ring-4 ring-white/10">
               <img alt="MG logo" className="h-full w-full rounded-full object-contain" src={LOGO_SRC} />
             </div>
-            <h1 className="text-4xl font-black tracking-normal sm:text-5xl">Odak Akademisi</h1>
+            <h1 className="text-4xl font-black tracking-normal sm:text-5xl">Odak Atölyesi</h1>
             <p className="mt-3 text-base font-bold text-white/55">{exercises.length} oyun · 4 kategori · Odaklanmayı geliştir</p>
             <button
               className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 text-sm font-black text-white/75 transition hover:bg-white/15"
@@ -1623,7 +1623,7 @@ function App() {
                   <Brain size={14} />
                   4-8. sınıf
                 </p>
-                <h1 className="text-2xl font-black text-white">Odak Akademisi</h1>
+                <h1 className="text-2xl font-black text-white">Odak Atölyesi</h1>
               </div>
               <span className="grid h-11 w-11 place-items-center rounded-lg bg-white text-slate-950">
                 <Trophy size={21} />
