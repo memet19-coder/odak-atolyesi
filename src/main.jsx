@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowLeft,
@@ -62,6 +62,7 @@ const exercises = [
   { id: "sirahafiza", title: "Sıra Takibi", skill: "dizi belleği", icon: Layers3, tone: "teal" },
   { id: "desen", title: "Örüntü Bul", skill: "dizi örüntüsü", icon: Target, tone: "orange" },
   { id: "anagram", title: "Anagram", skill: "harfleri sırala", icon: Grid3X3, tone: "sky" },
+  { id: "kelimecemberi", title: "Kelime Çemberi", skill: "harfleri birleştir", icon: CircleDot, tone: "orange" },
   { id: "esanlam", title: "Eş Anlam", skill: "anlam eşleştirme", icon: BookOpenText, tone: "emerald" },
   { id: "zitanlam", title: "Zıt Anlam", skill: "karşıt anlam", icon: ArrowDownUp, tone: "violet" },
 ];
@@ -98,7 +99,7 @@ const gameCategories = [
     id: "dil",
     title: "Kelime & Dil",
     subtitle: "Sözcük dikkatini geliştir",
-    exerciseIds: ["kelime", "anagram", "esanlam", "zitanlam"],
+    exerciseIds: ["kelime", "anagram", "kelimecemberi", "esanlam", "zitanlam"],
     icon: BookOpenText,
     accent: "from-amber-500 to-orange-500",
     chip: "bg-white/20 text-white",
@@ -132,6 +133,59 @@ const categorySets = [
 ];
 
 const wordBank = ["kalem", "kitap", "okul", "defter", "başarı", "dikkat", "oyun", "bilgi", "çalışma", "zihin", "öğretmen", "arkadaş", "gezegen", "orman", "deniz", "pencere"];
+
+const wordCirclePuzzles = {
+  3: [
+    { target: "ARI", bonus: ["AR"] },
+    { target: "KAR", bonus: ["AR"] },
+    { target: "BAL", bonus: ["AL"] },
+    { target: "GÜL", bonus: [] },
+    { target: "YOL", bonus: ["OY"] },
+    { target: "ÇAY", bonus: ["AY"] },
+    { target: "BUZ", bonus: ["BU"] },
+    { target: "TEL", bonus: ["EL"] },
+    { target: "TAŞ", bonus: ["AŞ"] },
+    { target: "KOL", bonus: ["OK"] },
+    { target: "DİL", bonus: ["İL"] },
+    { target: "SAÇ", bonus: ["AÇ"] },
+  ],
+  4: [
+    { target: "ELMA", bonus: ["ELA", "EL", "AL"] },
+    { target: "KALE", bonus: ["KAL", "ELA", "EL", "AL"] },
+    { target: "OYUN", bonus: ["OY", "UN", "ON"] },
+    { target: "MASA", bonus: ["AMA", "AS"] },
+    { target: "KEDİ", bonus: ["DİK", "EK"] },
+    { target: "SAAT", bonus: ["SAT", "AT", "AS"] },
+    { target: "KAPI", bonus: ["KAP", "AK"] },
+    { target: "DERS", bonus: ["DER"] },
+    { target: "AKIŞ", bonus: ["KIŞ", "AŞK", "AK"] },
+    { target: "OKUL", bonus: ["KUL", "OK"] },
+    { target: "EVRE", bonus: ["VER", "EV"] },
+    { target: "YAZI", bonus: ["YAZ", "AZ"] },
+  ],
+  5: [
+    { target: "KALEM", bonus: ["KALE", "KAL", "ELA", "EL", "AL"] },
+    { target: "KİTAP", bonus: ["KAP", "KAT", "TİP", "AİT", "İP"] },
+    { target: "DENİZ", bonus: ["DİZ", "DİN", "İZ"] },
+    { target: "ORMAN", bonus: ["ORAN", "ONAR", "NAR", "AN"] },
+    { target: "BALIK", bonus: ["BAL", "BAK", "KIL", "AL"] },
+    { target: "ARABA", bonus: ["ARA", "ABA", "BAR"] },
+    { target: "ÇİÇEK", bonus: ["ÇEK", "EK"] },
+    { target: "BULUT", bonus: ["BUL", "BUT", "ULU"] },
+    { target: "SANAT", bonus: ["ANA", "SAT", "AT"] },
+    { target: "KİRAZ", bonus: ["KAZ", "KAR", "KİR", "AZ"] },
+    { target: "DÜŞÜN", bonus: ["DÜŞ", "ÜŞÜ", "ÜN"] },
+    { target: "BİLGİ", bonus: ["BİL", "İLGİ", "İL"] },
+    { target: "ZAMAN", bonus: ["AMA", "ANA", "NAM", "AZ"] },
+    { target: "KAĞIT", bonus: ["AĞIT", "KAT", "AĞ", "AT"] },
+    { target: "ÇANTA", bonus: ["ÇAN", "ANA", "TAÇ"] },
+    { target: "GÜNEŞ", bonus: ["GÜN", "EŞ"] },
+    { target: "MASAL", bonus: ["MASA", "SAL", "AL"] },
+    { target: "SABAH", bonus: ["ABA", "BAS", "AS"] },
+    { target: "HABER", bonus: ["HER", "BAR"] },
+    { target: "SEPET", bonus: ["SET", "PES"] },
+  ],
+};
 
 const analogySets = [
   { minLevel: 5, stem: "Kalem : yazmak = Fırça : ?", answer: "boyamak", wrong: ["okumak", "ölçmek", "kesmek"] },
@@ -212,18 +266,19 @@ function makeMathOptions(correct) {
 
 function makeProgress() {
   return exercises.reduce((progress, exercise) => {
-    progress[exercise.id] = { level: 1, bestLevel: 1, bestScore: 0, correct: 0, attempts: 0, streak: 0 };
+    progress[exercise.id] = { level: 1, bestLevel: 1, bestScore: 0, bonusPoints: 0, correct: 0, attempts: 0, streak: 0 };
     return progress;
   }, {});
 }
 
-function getTimedSessionSeconds(level) {
+function getTimedSessionSeconds(level, exerciseId = "") {
   const safeLevel = clamp(level, 1, MAX_LEVEL);
+  if (exerciseId === "kelimecemberi") return Math.max(24, 46 - Math.floor((safeLevel - 1) * 0.75));
   return Math.max(TIMED_SESSION_MIN_SECONDS, TIMED_SESSION_BASE_SECONDS - Math.floor((safeLevel - 1) * 1.25));
 }
 
-function makeTimedSession(level, score = 0, mistakes = 0) {
-  const totalSeconds = getTimedSessionSeconds(level);
+function makeTimedSession(level, score = 0, mistakes = 0, exerciseId = "") {
+  const totalSeconds = getTimedSessionSeconds(level, exerciseId);
 
   return {
     active: true,
@@ -277,6 +332,7 @@ function generateExercise(exerciseId, level) {
   if (exerciseId === "renkhafiza") return generateColorMemoryTask(safeLevel);
   if (exerciseId === "sirahafiza") return generateOrderMemoryTask(safeLevel);
   if (exerciseId === "anagram") return generateAnagramTask(safeLevel);
+  if (exerciseId === "kelimecemberi") return generateWordCircleTask(safeLevel);
   if (exerciseId === "esanlam") return generateSynonymTask(safeLevel);
   if (exerciseId === "zitanlam") return generateAntonymTask(safeLevel);
   return generatePatternTask(safeLevel);
@@ -686,6 +742,26 @@ function generateAnagramTask() {
   };
 }
 
+function generateWordCircleTask(level) {
+  const letterCount = level <= 5 ? 3 : level <= 12 ? 4 : 5;
+  const puzzle = randomItem(wordCirclePuzzles[letterCount]);
+  const shuffledLetters = scrambleWord(puzzle.target).split("");
+
+  return {
+    prompt: `Çemberdeki harfleri birleştir ve ${letterCount} harfli hedef kelimeyi bul.`,
+    display: {
+      type: "wordCircle",
+      letters: shuffledLetters,
+      target: puzzle.target,
+      bonusWords: puzzle.bonus,
+      letterCount,
+    },
+    inputMode: "wordCircle",
+    options: [],
+    answerText: puzzle.target,
+  };
+}
+
 function generateSynonymTask() {
   const pair = randomItem(synonymPairs);
   const wrong = shuffle(synonymPairs.flat().filter((word) => !pair.includes(word))).slice(0, 3);
@@ -865,8 +941,221 @@ function MiniGridOption({ gridSize, active }) {
   );
 }
 
-function ChallengeDisplay({ challenge, phase, recallSelection = [], onToggleRecall, recallDisabled = false, result = null }) {
+function WordCircleGame({ display, disabled, onBonusWord, onComplete }) {
+  const boardRef = useRef(null);
+  const selectedRef = useRef([]);
+  const [selectedIndices, setSelectedIndices] = useState([]);
+  const [livePoint, setLivePoint] = useState(null);
+  const [isTracing, setIsTracing] = useState(false);
+  const [targetFound, setTargetFound] = useState(false);
+  const [foundBonusWords, setFoundBonusWords] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const boardSize = 280;
+  const center = boardSize / 2;
+  const radius = display.letters.length === 3 ? 91 : 98;
+  const positions = useMemo(
+    () => display.letters.map((_, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / display.letters.length;
+      return { x: center + Math.cos(angle) * radius, y: center + Math.sin(angle) * radius };
+    }),
+    [display.letters, center, radius],
+  );
+
+  useEffect(() => {
+    selectedRef.current = [];
+    setSelectedIndices([]);
+    setLivePoint(null);
+    setIsTracing(false);
+    setTargetFound(false);
+    setFoundBonusWords([]);
+    setFeedback(null);
+  }, [display.target]);
+
+  function updateSelection(nextSelection) {
+    selectedRef.current = nextSelection;
+    setSelectedIndices(nextSelection);
+  }
+
+  function getBoardPoint(event) {
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * boardSize,
+      y: ((event.clientY - rect.top) / rect.height) * boardSize,
+    };
+  }
+
+  function addLetter(index) {
+    if (disabled || targetFound || selectedRef.current.includes(index)) return;
+    updateSelection([...selectedRef.current, index]);
+    setFeedback(null);
+  }
+
+  function beginTrace(event, index) {
+    if (disabled || targetFound) return;
+    event.preventDefault();
+    updateSelection([index]);
+    setFeedback(null);
+    setIsTracing(true);
+    setLivePoint(getBoardPoint(event));
+    boardRef.current?.setPointerCapture?.(event.pointerId);
+  }
+
+  function continueTrace(event) {
+    if (!isTracing || disabled || targetFound) return;
+    const point = getBoardPoint(event);
+    if (!point) return;
+    setLivePoint(point);
+    const nearestIndex = positions.findIndex((position) => Math.hypot(position.x - point.x, position.y - point.y) <= 34);
+    if (nearestIndex >= 0) addLetter(nearestIndex);
+  }
+
+  function submitSelection(indices = selectedRef.current) {
+    if (disabled || targetFound) return;
+    const word = indices.map((index) => display.letters[index]).join("");
+    updateSelection([]);
+    setLivePoint(null);
+
+    if (word.length < 2) {
+      setFeedback({ tone: "neutral", text: "En az iki harfi birleştir." });
+      return;
+    }
+
+    if (word === display.target) {
+      setTargetFound(true);
+      setFeedback({ tone: "target", text: `${word} tamamlandı!` });
+      onComplete({ id: crypto.randomUUID(), text: word, correct: true, points: 1 });
+      return;
+    }
+
+    if (display.bonusWords.includes(word)) {
+      if (foundBonusWords.includes(word)) {
+        setFeedback({ tone: "neutral", text: `${word} daha önce bulundu.` });
+        return;
+      }
+      setFoundBonusWords((current) => [...current, word]);
+      setFeedback({ tone: "bonus", text: `${word} geçerli bir kelime: +2 bonus!` });
+      onBonusWord(word, 2);
+      return;
+    }
+
+    setFeedback({ tone: "wrong", text: `${word} bu harflerle kabul edilen bir kelime değil.` });
+  }
+
+  function endTrace(event) {
+    if (!isTracing) return;
+    event.preventDefault();
+    setIsTracing(false);
+    boardRef.current?.releasePointerCapture?.(event.pointerId);
+    submitSelection();
+  }
+
+  const selectedWord = selectedIndices.map((index) => display.letters[index]).join("");
+  const linePoints = selectedIndices.map((index) => positions[index]);
+  if (isTracing && livePoint) linePoints.push(livePoint);
+
+  return (
+    <div className="rounded-lg border border-orange-100 bg-white p-4 shadow-inner sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-500">{display.letterCount} harfli tur</p>
+          <p className="mt-1 text-sm font-bold text-slate-600">Parmağını kaldırmadan harfleri sırayla birleştir.</p>
+        </div>
+        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">Bonus kelime +2</span>
+      </div>
+
+      <div
+        className="relative mx-auto h-[280px] w-[280px] max-w-full touch-none select-none"
+        onPointerCancel={endTrace}
+        onPointerMove={continueTrace}
+        onPointerUp={endTrace}
+        ref={boardRef}
+      >
+        <div className="absolute inset-[35px] rounded-full border-2 border-orange-100 bg-gradient-to-br from-amber-50 to-orange-100 shadow-inner" />
+        <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${boardSize} ${boardSize}`}>
+          {linePoints.length > 1 ? (
+            <polyline fill="none" points={linePoints.map((point) => `${point.x},${point.y}`).join(" ")} stroke="#f97316" strokeLinecap="round" strokeLinejoin="round" strokeWidth="12" opacity="0.72" />
+          ) : null}
+        </svg>
+
+        <div className="pointer-events-none absolute left-1/2 top-1/2 grid h-20 w-32 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-2xl border border-white/80 bg-white/85 px-3 text-center shadow-lg backdrop-blur">
+          <span className={`text-2xl font-black tracking-[0.16em] ${selectedWord ? "text-orange-700" : "text-slate-300"}`}>
+            {selectedWord || "—"}
+          </span>
+        </div>
+
+        {display.letters.map((letter, index) => {
+          const position = positions[index];
+          const selected = selectedIndices.includes(index);
+          return (
+            <button
+              aria-label={`${letter} harfi`}
+              className={`absolute grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-4 text-2xl font-black shadow-lg transition ${
+                selected ? "z-20 border-orange-200 bg-orange-500 text-white scale-110" : "z-10 border-white bg-slate-950 text-white hover:bg-slate-800"
+              }`}
+              disabled={disabled || targetFound}
+              key={`${letter}-${index}`}
+              onClick={(event) => {
+                if (event.detail === 0) addLetter(index);
+              }}
+              onPointerDown={(event) => beginTrace(event, index)}
+              style={{ left: position.x, top: position.y }}
+              type="button"
+            >
+              {letter}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 flex justify-center gap-2">
+        <button className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50" disabled={!selectedIndices.length || disabled} onClick={() => updateSelection([])} type="button">
+          Temizle
+        </button>
+        <button className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" disabled={selectedIndices.length < 2 || disabled} onClick={() => submitSelection()} type="button">
+          Kelimeyi dene
+        </button>
+      </div>
+
+      {feedback ? (
+        <div className={`mx-auto mt-4 max-w-md rounded-lg border px-4 py-3 text-center text-sm font-black ${
+          feedback.tone === "target"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : feedback.tone === "bonus"
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : feedback.tone === "wrong"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-slate-200 bg-slate-50 text-slate-600"
+        }`}>{feedback.text}</div>
+      ) : null}
+
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <p className="mb-3 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-400">Hedef kelime</p>
+        <div className="flex justify-center gap-2" aria-label="Hedef kelime kutuları">
+          {display.target.split("").map((letter, index) => (
+            <span className={`grid h-12 w-11 place-items-center rounded-lg border-2 text-xl font-black transition ${targetFound ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-300"}`} key={`${letter}-${index}`}>
+              {targetFound ? letter : ""}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 min-h-12 rounded-lg bg-amber-50 px-4 py-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-600">Bulunan bonus kelimeler</p>
+        <div className="mt-2 flex min-h-6 flex-wrap gap-2">
+          {foundBonusWords.length ? foundBonusWords.map((word) => <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-amber-800 shadow-sm" key={word}>{word} · +2</span>) : <span className="text-sm font-bold text-amber-700/60">Henüz bonus kelime yok.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChallengeDisplay({ challenge, phase, recallSelection = [], onToggleRecall, recallDisabled = false, result = null, onBonusWord, onWordCircleComplete }) {
   const display = challenge.display;
+
+  if (display.type === "wordCircle") {
+    return <WordCircleGame disabled={recallDisabled} display={display} onBonusWord={onBonusWord} onComplete={onWordCircleComplete} />;
+  }
 
   if (display.type === "stroop") {
     return (
@@ -1113,13 +1402,14 @@ function ChallengeDisplay({ challenge, phase, recallSelection = [], onToggleReca
   );
 }
 
-function GamePanel({ challenge, exercise, onAnswer, phase, progress, result, selectedOption, timedSession }) {
+function GamePanel({ challenge, exercise, onAnswer, onBonusWord, phase, progress, result, selectedOption, timedSession }) {
   const Icon = exercise.icon;
   const tone = toneStyles[exercise.tone] || toneStyles.blue;
   const nextLevelPercent = (progress.streak / LEVEL_UP_STREAK) * 100;
   const hasTimer = Boolean(timedSession?.active || timedSession?.finished);
   const timePercent = hasTimer && timedSession.totalSeconds > 0 ? (timedSession.secondsLeft / timedSession.totalSeconds) * 100 : 0;
   const isVisualRecall = challenge.inputMode === "visualRecall";
+  const isWordCircle = challenge.inputMode === "wordCircle";
   const [recallSelection, setRecallSelection] = useState([]);
 
   useEffect(() => {
@@ -1181,8 +1471,9 @@ function GamePanel({ challenge, exercise, onAnswer, phase, progress, result, sel
           </span>
           <span className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
             <Trophy size={16} />
-            Rekor {progress.bestScore || 0} doğru
+            Rekor {progress.bestScore || 0} puan
           </span>
+          {isWordCircle ? <span className="inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm font-bold text-orange-800"><Sparkles size={16} />Bonus {progress.bonusPoints || 0}</span> : null}
         </div>
       </div>
 
@@ -1205,7 +1496,7 @@ function GamePanel({ challenge, exercise, onAnswer, phase, progress, result, sel
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm font-black text-orange-950">
               <span className="rounded-full bg-white px-3 py-1">{timedSession.secondsLeft} sn</span>
-              <span className="rounded-full bg-white px-3 py-1">{timedSession.score} doğru</span>
+              <span className="rounded-full bg-white px-3 py-1">{timedSession.score} puan</span>
               <span className="rounded-full bg-white px-3 py-1">{timedSession.mistakes} hata</span>
             </div>
           </div>
@@ -1226,6 +1517,8 @@ function GamePanel({ challenge, exercise, onAnswer, phase, progress, result, sel
         recallDisabled={Boolean(result)}
         recallSelection={recallSelection}
         result={result}
+        onBonusWord={onBonusWord}
+        onWordCircleComplete={onAnswer}
       />
 
       {phase === "preview" ? (
@@ -1238,7 +1531,7 @@ function GamePanel({ challenge, exercise, onAnswer, phase, progress, result, sel
             Seçilen kare: {recallSelection.length}/{challenge.display.active.length}
           </p>
         </div>
-      ) : (
+      ) : isWordCircle ? null : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {challenge.options.map((item) => {
             const isSelected = selectedOption?.id === item.id;
@@ -1369,12 +1662,12 @@ function App() {
     setResult(null);
     setTimedSession((current) => {
       if (!current.active) return current;
-      return makeTimedSession(nextProgress[nextId].level, current.score, current.mistakes);
+      return makeTimedSession(nextProgress[nextId].level, current.score, current.mistakes, nextId);
     });
   }
 
   function startTimedSession(nextProgress = progress, exerciseId = activeExercise.id) {
-    setTimedSession(makeTimedSession(nextProgress[exerciseId].level));
+    setTimedSession(makeTimedSession(nextProgress[exerciseId].level, 0, 0, exerciseId));
     startNewChallenge(nextProgress, exerciseId);
   }
 
@@ -1414,16 +1707,18 @@ function App() {
   function finishRound(item, timedOut = false) {
     const current = progress[activeExercise.id];
     const correct = Boolean(item?.correct) && !timedOut;
+    const earnedPoints = correct ? item?.points || 1 : 0;
     const nextStreak = correct ? current.streak + 1 : 0;
     const leveledUp = correct && nextStreak >= LEVEL_UP_STREAK && current.level < MAX_LEVEL;
     const nextLevel = leveledUp ? current.level + 1 : current.level;
-    const nextSessionScore = timedSession.active ? timedSession.score + (correct ? 1 : 0) : current.bestScore;
+    const nextSessionScore = timedSession.active ? timedSession.score + earnedPoints : current.bestScore;
     const nextProgress = {
       ...progress,
       [activeExercise.id]: {
         level: nextLevel,
         bestLevel: Math.max(current.bestLevel, nextLevel),
         bestScore: Math.max(current.bestScore || 0, nextSessionScore),
+        bonusPoints: current.bonusPoints || 0,
         correct: current.correct + (correct ? 1 : 0),
         attempts: current.attempts + 1,
         streak: leveledUp ? 0 : nextStreak,
@@ -1436,10 +1731,21 @@ function App() {
     if (timedSession.active) {
       setTimedSession((currentSession) => ({
         ...currentSession,
-        score: currentSession.score + (correct ? 1 : 0),
+        score: currentSession.score + earnedPoints,
         mistakes: currentSession.mistakes + (correct ? 0 : 1),
       }));
     }
+  }
+
+  function handleBonusWord(_word, points) {
+    setProgress((currentProgress) => ({
+      ...currentProgress,
+      [activeExercise.id]: {
+        ...currentProgress[activeExercise.id],
+        bonusPoints: (currentProgress[activeExercise.id].bonusPoints || 0) + points,
+      },
+    }));
+    setTimedSession((currentSession) => currentSession.active ? { ...currentSession, score: currentSession.score + points } : currentSession);
   }
 
   function handleTimeout() {
@@ -1454,6 +1760,7 @@ function App() {
         level: 1,
         bestLevel: progress[activeExercise.id].bestLevel,
         bestScore: progress[activeExercise.id].bestScore || 0,
+        bonusPoints: 0,
         correct: 0,
         attempts: 0,
         streak: 0,
@@ -1583,6 +1890,7 @@ function App() {
             challenge={challenge}
             exercise={activeExercise}
             onAnswer={handleAnswer}
+            onBonusWord={handleBonusWord}
             phase={phase}
             progress={activeProgress}
             result={result}
@@ -1695,6 +2003,7 @@ function App() {
             challenge={challenge}
             exercise={activeExercise}
             onAnswer={handleAnswer}
+            onBonusWord={handleBonusWord}
             phase={phase}
             progress={activeProgress}
             result={result}
