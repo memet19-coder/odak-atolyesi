@@ -30,6 +30,7 @@ const MAX_LEVEL = 30;
 const LEVEL_UP_STREAK = 3;
 const TIMED_SESSION_BASE_SECONDS = 16;
 const TIMED_SESSION_MIN_SECONDS = 3;
+const COLOR_GAME_MAX_MISTAKES = 3;
 
 const colors = [
   { name: "Kırmızı", hex: "#dc2626", bg: "bg-red-500" },
@@ -1402,7 +1403,7 @@ function ChallengeDisplay({ challenge, phase, recallSelection = [], onToggleReca
   );
 }
 
-function GamePanel({ challenge, exercise, onAnswer, onBonusWord, phase, progress, result, selectedOption, timedSession }) {
+function GamePanel({ challenge, exercise, onAnswer, onBonusWord, onRestart, phase, progress, result, selectedOption, timedSession }) {
   const Icon = exercise.icon;
   const tone = toneStyles[exercise.tone] || toneStyles.blue;
   const nextLevelPercent = (progress.streak / LEVEL_UP_STREAK) * 100;
@@ -1497,7 +1498,9 @@ function GamePanel({ challenge, exercise, onAnswer, onBonusWord, phase, progress
             <div className="flex flex-wrap items-center gap-2 text-sm font-black text-orange-950">
               <span className="rounded-full bg-white px-3 py-1">{timedSession.secondsLeft} sn</span>
               <span className="rounded-full bg-white px-3 py-1">{timedSession.score} puan</span>
-              <span className="rounded-full bg-white px-3 py-1">{timedSession.mistakes} hata</span>
+              <span className="rounded-full bg-white px-3 py-1">
+                {timedSession.mistakes}{exercise.id === "renk" ? `/${COLOR_GAME_MAX_MISTAKES}` : ""} hata
+              </span>
             </div>
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-white">
@@ -1506,6 +1509,24 @@ function GamePanel({ challenge, exercise, onAnswer, onBonusWord, phase, progress
         </div>
       ) : null}
 
+      {timedSession.finished ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-center">
+          <XCircle className="mx-auto text-red-600" size={34} />
+          <h3 className="mt-3 text-xl font-black text-red-950">Oyun bitti</h3>
+          <p className="mt-1 text-sm font-bold text-red-800">
+            {COLOR_GAME_MAX_MISTAKES} hata hakkını doldurdun. Bu turda {timedSession.score} puan kazandın.
+          </p>
+          <button
+            className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800"
+            onClick={onRestart}
+            type="button"
+          >
+            <RotateCcw size={17} />
+            Yeniden başla
+          </button>
+        </div>
+      ) : (
+        <>
       <div className="mb-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
         <p className="text-base font-black leading-7 text-slate-950">{challenge.prompt}</p>
       </div>
@@ -1578,6 +1599,8 @@ function GamePanel({ challenge, exercise, onAnswer, onBonusWord, phase, progress
           </p>
         </div>
       ) : null}
+        </>
+      )}
       </div>
     </section>
   );
@@ -1626,7 +1649,7 @@ function App() {
   }, [challenge, phase]);
 
   useEffect(() => {
-    if (!result) return undefined;
+    if (!result || timedSession.finished) return undefined;
     const nextDelay = result.visualRecall ? (result.correct ? 220 : 850) : result.correct ? 650 : 1100;
 
     const timer = window.setTimeout(() => {
@@ -1634,7 +1657,7 @@ function App() {
     }, nextDelay);
 
     return () => window.clearTimeout(timer);
-  }, [activeExercise.id, progress, result]);
+  }, [activeExercise.id, progress, result, timedSession.finished]);
 
   useEffect(() => {
     if (screen !== "play" || phase !== "answer" || result || !timedSession.active) return undefined;
@@ -1729,11 +1752,19 @@ function App() {
     setResult({ correct, leveledUp, timedOut, visualRecall: Boolean(item?.visualRecall) });
     setProgress(nextProgress);
     if (timedSession.active) {
-      setTimedSession((currentSession) => ({
-        ...currentSession,
-        score: currentSession.score + earnedPoints,
-        mistakes: currentSession.mistakes + (correct ? 0 : 1),
-      }));
+      setTimedSession((currentSession) => {
+        const nextMistakes = currentSession.mistakes + (correct ? 0 : 1);
+        const reachedMistakeLimit = activeExercise.id === "renk" && nextMistakes >= COLOR_GAME_MAX_MISTAKES;
+
+        return {
+          ...currentSession,
+          active: !reachedMistakeLimit,
+          finished: reachedMistakeLimit,
+          secondsLeft: reachedMistakeLimit ? 0 : currentSession.secondsLeft,
+          score: currentSession.score + earnedPoints,
+          mistakes: nextMistakes,
+        };
+      });
     }
   }
 
@@ -1891,6 +1922,7 @@ function App() {
             exercise={activeExercise}
             onAnswer={handleAnswer}
             onBonusWord={handleBonusWord}
+            onRestart={() => startTimedSession(progress, activeExercise.id)}
             phase={phase}
             progress={activeProgress}
             result={result}
